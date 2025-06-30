@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compressor de PDF - Batch</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .file-input-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #666;
+            font-size: 16px;
+        }
+
+        .file-input-button:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            color: #667eea;
+        }
+
+        .file-input-button.has-files {
+            border-color: #28a745;
+            background: #f0fff4;
+            color: #28a745;
+        }
+
+        .selected-folder {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f5e8;
+            border-radius: 5px;
+            color: #2d5a2d;
+            font-size: 14px;
+            word-break: break-all;
+            line-height: 1.4;
+        }
+
+        .selected-folder code {
+            background: #d4edda;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .selected-folder em {
+            color: #155724;
+            font-style: italic;
+        }
+
+        .optimization-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .optimization-group label {
+            margin-bottom: 0;
+            font-size: 14px;
+        }
+
+        select, input[type="range"] {
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+            width: 100%;
+        }
+
+        select:focus, input[type="range"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .range-container {
+            flex: 1;
+        }
+
+        .range-value {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .compress-button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            margin-top: 20px;
+        }
+
+        .compress-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+
+        .compress-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 10px;
+            background: #f8f9fa;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e1e5e9;
+            font-size: 14px;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-name {
+            flex: 1;
+            margin-right: 10px;
+            word-break: break-all;
+        }
+
+        .file-status {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #ffeaa7;
+            color: #d68910;
+        }
+
+        .status-processing {
+            background: #74b9ff;
+            color: #0984e3;
+        }
+
+        .status-completed {
+            background: #00b894;
+            color: white;
+        }
+
+        .status-error {
+            background: #e17055;
+            color: white;
+        }
+
+        .results-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .results-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .results-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e1e5e9;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"], 
+        .checkbox-group input[type="radio"] {
+            width: auto;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .optimization-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .results-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗜️ Compressor de PDF</h1>
+        
+        <form id="compressionForm">
+            <div class="form-group">
+                <label for="sourcePath">Pasta com arquivos PDF: <span style="color: #e74c3c;">*</span></label>
+                <input type="text" id="sourcePath" placeholder="/Users/melque/Projetos/pdf_compressor/pdf-compressor/jan/AGOSTO.2023" 
+                       style="width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 14px; font-family: 'Courier New', monospace;">
+                <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                    Digite o caminho completo da pasta contendo os arquivos PDF. Exemplo: <code>/Users/melque/Projetos/pasta-origem</code>
+                </small>
+            </div>
+
+            <div class="form-group">
+                <div style="padding: 10px; background: #e8f5e8; border-radius: 5px; color: #2d5a2d; font-size: 14px;">
+                    📁 <strong>Pasta de destino:</strong> Os arquivos comprimidos serão salvos <strong>no mesmo local dos arquivos originais</strong> (incluindo subpastas) com o sufixo <code>_red.pdf</code>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Nível de otimização:</label>
+                <div class="optimization-group">
+                    <div class="range-container">
+                        <input type="range" id="optimizeLevel" min="1" max="5" value="3">
+                    </div>
+                    <span class="range-value" id="optimizeLevelValue">3</span>
+                </div>
+                <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                    1 = Menor compressão, 5 = Maior compressão
+                </small>
+            </div>
+
+            <button type="submit" class="compress-button" id="compressButton">
+                🚀 Iniciar Compressão
+            </button>
+        </form>
+
+        <div class="progress-section" id="progressSection">
+            <div class="progress-info">
+                <span id="progressStatus">Preparando...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="file-list" id="fileList"></div>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <div class="results-title">📊 Resultados da Compressão</div>
+            <div class="results-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="totalFiles">0</span>
+                    <span class="stat-label">Arquivos</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="successFiles">0</span>
+                    <span class="stat-label">Sucessos</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="totalSavings">0%</span>
+                    <span class="stat-label">Economia</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="totalTime">0s</span>
+                    <span class="stat-label">Tempo Total</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class PDFCompressor {
+            constructor() {
+                this.apiUrl = 'http://localhost:3000/api/compress-pdf';
+                this.isProcessing = false;
+                this.stats = {
+                    total: 0,
+                    processed: 0,
+                    successful: 0,
+                    failed: 0,
+                    totalOriginalSize: 0,
+                    totalCompressedSize: 0,
+                    startTime: null
+                };
+                
+                this.initializeElements();
+                this.bindEvents();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    sourcePath: document.getElementById('sourcePath'),
+                    optimizeLevel: document.getElementById('optimizeLevel'),
+                    optimizeLevelValue: document.getElementById('optimizeLevelValue'),
+                    compressButton: document.getElementById('compressButton'),
+                    form: document.getElementById('compressionForm'),
+                    progressSection: document.getElementById('progressSection'),
+                    progressFill: document.getElementById('progressFill'),
+                    progressStatus: document.getElementById('progressStatus'),
+                    progressPercent: document.getElementById('progressPercent'),
+                    fileList: document.getElementById('fileList'),
+                    resultsSection: document.getElementById('resultsSection'),
+                    totalFiles: document.getElementById('totalFiles'),
+                    successFiles: document.getElementById('successFiles'),
+                    totalSavings: document.getElementById('totalSavings'),
+                    totalTime: document.getElementById('totalTime')
+                };
+            }
+
+            bindEvents() {
+                this.elements.optimizeLevel.addEventListener('input', (e) => this.handleOptimizeLevelChange(e));
+                this.elements.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+            }
+
+
+
+            handleOptimizeLevelChange(e) {
+                this.elements.optimizeLevelValue.textContent = e.target.value;
+            }
+
+            async handleFormSubmit(e) {
+                e.preventDefault();
+                
+                if (!this.elements.sourcePath.value.trim()) {
+                    alert('Por favor, especifique o caminho da pasta com arquivos PDF.');
+                    return;
+                }
+
+
+
+                if (this.isProcessing) {
+                    return;
+                }
+
+                await this.startCompression();
+            }
+
+            async startCompression() {
+                this.isProcessing = true;
+                
+                // Get list of PDFs from the server
+                const sourcePath = this.elements.sourcePath.value.trim();
+                const pdfFiles = await this.getPDFList(sourcePath);
+                
+                if (pdfFiles.length === 0) {
+                    alert('Nenhum arquivo PDF encontrado na pasta especificada.');
+                    this.isProcessing = false;
+                    return;
+                }
+                
+                this.stats = {
+                    total: pdfFiles.length,
+                    processed: 0,
+                    successful: 0,
+                    failed: 0,
+                    totalOriginalSize: 0,
+                    totalCompressedSize: 0,
+                    startTime: Date.now(),
+                    savedPaths: []
+                };
+
+                this.elements.compressButton.disabled = true;
+                this.elements.compressButton.textContent = '⏳ Comprimindo...';
+                this.elements.progressSection.style.display = 'block';
+                this.elements.resultsSection.style.display = 'none';
+
+                this.initializeFileList(pdfFiles);
+                
+                try {
+                    await this.processFiles(pdfFiles);
+                } catch (error) {
+                    console.error('Erro durante a compressão:', error);
+                    alert('Erro durante o processo de compressão. Verifique o console para mais detalhes.');
+                } finally {
+                    this.finishCompression();
+                }
+            }
+
+            async getPDFList(sourcePath) {
+                try {
+                    console.log(`🔍 Solicitando lista de PDFs para: ${sourcePath}`);
+                    
+                    const response = await fetch('/api/list-pdfs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sourcePath })
+                    });
+                    
+                    console.log(`📡 Response status: ${response.status}`);
+                    console.log(`📡 Response headers:`, response.headers.get('content-type'));
+                    
+                    // Check if response is JSON
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        const textResponse = await response.text();
+                        console.error('❌ Non-JSON response:', textResponse);
+                        throw new Error(`Servidor retornou resposta inválida. Status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.error || `Erro HTTP ${response.status}`);
+                    }
+                    
+                    console.log(`✅ Encontrados ${data.files?.length || 0} arquivos PDF`);
+                    if (data.recursive) {
+                        console.log('📁 Busca recursiva realizada');
+                    }
+                    return data.files || [];
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao obter lista de PDFs:', error);
+                    
+                    // Provide more specific error messages
+                    let errorMessage = error.message;
+                    if (error.message.includes('JSON.parse')) {
+                        errorMessage = 'Erro interno do servidor. Verifique se o caminho existe e tem permissões adequadas.';
+                    } else if (error.message.includes('fetch')) {
+                        errorMessage = 'Erro de conexão com o servidor.';
+                    }
+                    
+                    alert(`Erro ao acessar pasta: ${errorMessage}`);
+                    return [];
+                }
+            }
+
+            initializeFileList(pdfFiles) {
+                this.elements.fileList.innerHTML = '';
+                pdfFiles.forEach((fileInfo, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    
+                    // Handle both old format (string) and new format (object)
+                    const displayName = typeof fileInfo === 'string' ? fileInfo : fileInfo.relativePath;
+                    
+                    fileItem.innerHTML = `
+                        <span class="file-name">${displayName}</span>
+                        <span class="file-status status-pending" id="status-${index}">Pendente</span>
+                    `;
+                    this.elements.fileList.appendChild(fileItem);
+                });
+            }
+
+            async processFiles(pdfFiles) {
+                const optimizeLevel = this.elements.optimizeLevel.value;
+                const sourcePath = this.elements.sourcePath.value.trim();
+                
+                for (let i = 0; i < pdfFiles.length; i++) {
+                    const fileInfo = pdfFiles[i];
+                    const statusElement = document.getElementById(`status-${i}`);
+                    
+                    // Handle both old format (string) and new format (object)
+                    const fileName = typeof fileInfo === 'string' ? fileInfo : fileInfo.fileName;
+                    const fullPath = typeof fileInfo === 'string' ? `${sourcePath}/${fileInfo}` : fileInfo.fullPath;
+                    const displayName = typeof fileInfo === 'string' ? fileInfo : fileInfo.relativePath;
+                    
+                    try {
+                        statusElement.textContent = 'Processando...';
+                        statusElement.className = 'file-status status-processing';
+                        
+                        this.updateProgress(`Comprimindo: ${displayName}`, i);
+                        
+                        const result = await this.compressFileFromFullPath(fullPath, fileName, optimizeLevel);
+                        
+                        if (result.success) {
+                            statusElement.textContent = `✅ ${result.savings}% redução`;
+                            statusElement.className = 'file-status status-completed';
+                            this.stats.successful++;
+                            this.stats.totalOriginalSize += result.originalSize;
+                            this.stats.totalCompressedSize += result.compressedSize;
+                            
+                            // Track saved paths for folder opening
+                            if (result.savedPath) {
+                                this.stats.savedPaths.push(result.savedPath);
+                            }
+                        } else {
+                            statusElement.textContent = '❌ Erro';
+                            statusElement.className = 'file-status status-error';
+                            this.stats.failed++;
+                        }
+                    } catch (error) {
+                        console.error(`Erro ao processar ${fileName}:`, error);
+                        statusElement.textContent = '❌ Erro';
+                        statusElement.className = 'file-status status-error';
+                        this.stats.failed++;
+                    }
+                    
+                    this.stats.processed++;
+                    this.updateProgress(`Processados: ${this.stats.processed}/${this.stats.total}`, this.stats.processed);
+                }
+            }
+
+            async compressFileFromFullPath(fullPath, fileName, optimizeLevel) {
+                try {
+                    const response = await fetch('/api/compress-pdf-from-full-path', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            fullPath,
+                            fileName,
+                            optimizeLevel
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(`HTTP error! status: ${response.status} - ${errorData.message || 'Unknown error'}`);
+                    }
+
+                    const result = await response.json();
+                    return {
+                        success: true,
+                        originalSize: result.originalSize,
+                        compressedSize: result.compressedSize,
+                        savings: result.savings,
+                        savedPath: result.savedPath
+                    };
+                } catch (error) {
+                    console.error('Erro na compressão:', error);
+                    return { success: false };
+                }
+            }
+
+            async compressFileFromPath(sourcePath, fileName, optimizeLevel) {
+                try {
+                    const response = await fetch('/api/compress-pdf-from-path', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sourcePath,
+                            fileName,
+                            optimizeLevel,
+                            destinationPath: this.elements.destinationPath.value.trim()
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(`HTTP error! status: ${response.status} - ${errorData.message || 'Unknown error'}`);
+                    }
+
+                    const result = await response.json();
+                    return {
+                        success: true,
+                        originalSize: result.originalSize,
+                        compressedSize: result.compressedSize,
+                        savings: result.savings,
+                        savedPath: result.savedPath
+                    };
+                } catch (error) {
+                    console.error('Erro na compressão:', error);
+                    return { success: false };
+                }
+            }
+
+            async compressFile(file, optimizeLevel) {
+                const formData = new FormData();
+                formData.append('fileInput', file);
+                formData.append('optimizeLevel', optimizeLevel);
+                
+                // Add destination path specified by user
+                formData.append('destinationPath', this.elements.destinationPath.value.trim());
+                formData.append('originalFilePath', file.webkitRelativePath || file.name);
+
+                const response = await fetch(this.apiUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorData.message || 'Unknown error'}`);
+                }
+
+                // Check if response is JSON (file was saved) or blob (file download)
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    // File was saved on server
+                    const result = await response.json();
+                    return {
+                        success: true,
+                        originalSize: result.originalSize,
+                        compressedSize: result.compressedSize,
+                        savings: result.savings,
+                        savedPath: result.savedPath
+                    };
+                } else {
+                    // Fallback to download (old behavior)
+                    const compressedBlob = await response.blob();
+                    
+                    // Get compression stats from response headers
+                    const originalSize = parseInt(response.headers.get('X-Original-Size')) || file.size;
+                    const compressedSize = parseInt(response.headers.get('X-Compressed-Size')) || compressedBlob.size;
+                    const savings = parseInt(response.headers.get('X-Savings-Percent')) || 
+                        Math.round(((originalSize - compressedSize) / originalSize) * 100);
+
+                    // Download the compressed file
+                    const downloadUrl = URL.createObjectURL(compressedBlob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = file.name.replace('.pdf', '_red.pdf');
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(downloadUrl);
+
+                    return {
+                        success: true,
+                        originalSize,
+                        compressedSize,
+                        savings
+                    };
+                }
+            }
+
+            updateProgress(status, current) {
+                const percent = Math.round((current / this.stats.total) * 100);
+                this.elements.progressStatus.textContent = status;
+                this.elements.progressPercent.textContent = `${percent}%`;
+                this.elements.progressFill.style.width = `${percent}%`;
+            }
+
+            async finishCompression() {
+                this.isProcessing = false;
+                this.elements.compressButton.disabled = false;
+                this.elements.compressButton.textContent = '🚀 Iniciar Compressão';
+                
+                const totalTime = Math.round((Date.now() - this.stats.startTime) / 1000);
+                const totalSavings = this.stats.totalOriginalSize > 0 ? 
+                    Math.round(((this.stats.totalOriginalSize - this.stats.totalCompressedSize) / this.stats.totalOriginalSize) * 100) : 0;
+
+                this.elements.totalFiles.textContent = this.stats.total;
+                this.elements.successFiles.textContent = this.stats.successful;
+                this.elements.totalSavings.textContent = `${totalSavings}%`;
+                this.elements.totalTime.textContent = `${totalTime}s`;
+                
+                this.elements.resultsSection.style.display = 'block';
+                this.elements.progressStatus.textContent = 'Compressão concluída!';
+                this.elements.progressPercent.textContent = '100%';
+                this.elements.progressFill.style.width = '100%';
+
+                // Open the destination folder if files were saved successfully
+                if (this.stats.successful > 0 && this.stats.savedPaths && this.stats.savedPaths.length > 0) {
+                    try {
+                        // Get the directory of the first saved file
+                        const firstSavedPath = this.stats.savedPaths[0];
+                        const folderPath = firstSavedPath.substring(0, firstSavedPath.lastIndexOf('/'));
+                        
+                        const response = await fetch('http://localhost:3000/api/open-folder', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ folderPath })
+                        });
+
+                        if (response.ok) {
+                            console.log('📁 Pasta de destino aberta com sucesso');
+                        } else {
+                            console.error('❌ Erro ao abrir pasta de destino');
+                        }
+                    } catch (error) {
+                        console.error('❌ Erro ao tentar abrir pasta:', error);
+                    }
+                }
+            }
+        }
+
+        // Initialize the compressor when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new PDFCompressor();
+        });
+    </script>
+</body>
+</html>
