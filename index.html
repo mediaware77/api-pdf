@@ -377,6 +377,16 @@
                 </small>
             </div>
 
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="deleteOriginal" style="margin-right: 8px;">
+                    🗑️ Apagar arquivos originais após compressão
+                </label>
+                <small style="color: #e74c3c; font-size: 12px; margin-top: 5px; display: block;">
+                    ⚠️ Esta ação é irreversível! Os arquivos originais serão permanentemente removidos.
+                </small>
+            </div>
+
             <button type="submit" class="compress-button" id="compressButton">
                 🚀 Iniciar Compressão
             </button>
@@ -440,6 +450,7 @@
                     sourcePath: document.getElementById('sourcePath'),
                     optimizeLevel: document.getElementById('optimizeLevel'),
                     optimizeLevelValue: document.getElementById('optimizeLevelValue'),
+                    deleteOriginal: document.getElementById('deleteOriginal'),
                     compressButton: document.getElementById('compressButton'),
                     form: document.getElementById('compressionForm'),
                     progressSection: document.getElementById('progressSection'),
@@ -609,10 +620,14 @@
                         
                         this.updateProgress(`Comprimindo: ${displayName}`, i);
                         
-                        const result = await this.compressFileFromFullPath(fullPath, fileName, optimizeLevel);
+                        const deleteOriginal = this.elements.deleteOriginal.checked;
+                        const result = await this.compressFileFromFullPath(fullPath, fileName, optimizeLevel, deleteOriginal);
                         
                         if (result.success) {
-                            statusElement.textContent = `✅ ${result.savings}% redução`;
+                            const statusText = deleteOriginal && result.originalDeleted 
+                                ? `✅ ${result.savings}% redução (original removido)`
+                                : `✅ ${result.savings}% redução`;
+                            statusElement.textContent = statusText;
                             statusElement.className = 'file-status status-completed';
                             this.stats.successful++;
                             this.stats.totalOriginalSize += result.originalSize;
@@ -639,16 +654,24 @@
                 }
             }
 
-            async compressFileFromFullPath(fullPath, fileName, optimizeLevel) {
+            async compressFileFromFullPath(fullPath, fileName, optimizeLevel, deleteOriginal) {
                 try {
+                    // 🔍 DEBUG TEMPORÁRIO
+                    console.log('🔍 DEBUG - Checkbox state:', deleteOriginal);
+                    console.log('🔍 DEBUG - Checkbox type:', typeof deleteOriginal);
+                    
+                    const requestData = {
+                        fullPath,
+                        fileName,
+                        optimizeLevel,
+                        deleteOriginal
+                    };
+                    console.log('🔍 DEBUG - JSON sendo enviado:', JSON.stringify(requestData, null, 2));
+                    
                     const response = await fetch('/api/compress-pdf-from-full-path', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            fullPath,
-                            fileName,
-                            optimizeLevel
-                        })
+                        body: JSON.stringify(requestData)
                     });
 
                     if (!response.ok) {
@@ -662,7 +685,8 @@
                         originalSize: result.originalSize,
                         compressedSize: result.compressedSize,
                         savings: result.savings,
-                        savedPath: result.savedPath
+                        savedPath: result.savedPath,
+                        originalDeleted: result.originalDeleted
                     };
                 } catch (error) {
                     console.error('Erro na compressão:', error);
@@ -672,6 +696,7 @@
 
             async compressFileFromPath(sourcePath, fileName, optimizeLevel) {
                 try {
+                    const deleteOriginal = this.elements.deleteOriginal.checked;
                     const response = await fetch('/api/compress-pdf-from-path', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -679,7 +704,8 @@
                             sourcePath,
                             fileName,
                             optimizeLevel,
-                            destinationPath: this.elements.destinationPath.value.trim()
+                            destinationPath: this.elements.destinationPath.value.trim(),
+                            deleteOriginal
                         })
                     });
 
@@ -694,7 +720,8 @@
                         originalSize: result.originalSize,
                         compressedSize: result.compressedSize,
                         savings: result.savings,
-                        savedPath: result.savedPath
+                        savedPath: result.savedPath,
+                        originalDeleted: result.originalDeleted
                     };
                 } catch (error) {
                     console.error('Erro na compressão:', error);

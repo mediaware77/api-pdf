@@ -144,8 +144,8 @@ app.post('/api/compress-pdf', upload.single('fileInput'), async (req, res) => {
             let saveDir;
             
             if (destinationPath && destinationPath.trim()) {
-                // Use the exact path specified by the user
-                saveDir = destinationPath.trim();
+                // Clean the path by removing leading/trailing quotes
+                saveDir = destinationPath.trim().replace(/^['"]+|['"]+$/g, '');
                 console.log(`📁 Using user-specified path: ${saveDir}`);
                 
                 // Validate that the path exists
@@ -232,7 +232,10 @@ app.post('/api/open-folder', (req, res) => {
     try {
         const { folderPath } = req.body;
         
-        if (!folderPath || !fs.existsSync(folderPath)) {
+        // Clean the path by removing leading/trailing quotes
+        const cleanFolderPath = folderPath ? folderPath.trim().replace(/^['"]+|['"]+$/g, '') : null;
+        
+        if (!cleanFolderPath || !fs.existsSync(cleanFolderPath)) {
             return res.status(400).json({ error: 'Invalid folder path' });
         }
 
@@ -242,13 +245,13 @@ app.post('/api/open-folder', (req, res) => {
         // Determine the command based on the operating system
         switch (process.platform) {
             case 'darwin': // macOS
-                command = `open "${folderPath}"`;
+                command = `open "${cleanFolderPath}"`;
                 break;
             case 'win32': // Windows
-                command = `explorer "${folderPath}"`;
+                command = `explorer "${cleanFolderPath}"`;
                 break;
             case 'linux': // Linux
-                command = `xdg-open "${folderPath}"`;
+                command = `xdg-open "${cleanFolderPath}"`;
                 break;
             default:
                 return res.status(500).json({ error: 'Unsupported operating system' });
@@ -259,7 +262,7 @@ app.post('/api/open-folder', (req, res) => {
                 console.error('❌ Error opening folder:', error);
                 res.status(500).json({ error: 'Failed to open folder' });
             } else {
-                console.log(`📁 Opened folder: ${folderPath}`);
+                console.log(`📁 Opened folder: ${cleanFolderPath}`);
                 res.json({ success: true, message: 'Folder opened successfully' });
             }
         });
@@ -279,7 +282,8 @@ app.post('/api/list-pdfs', (req, res) => {
             return res.status(400).json({ error: 'Source path is required' });
         }
         
-        const dir = sourcePath.trim();
+        // Clean the path by removing leading/trailing quotes
+        const dir = sourcePath.trim().replace(/^['"]+|['"]+$/g, '');
         
         // Validate that the path exists
         if (!fs.existsSync(dir)) {
@@ -333,12 +337,13 @@ app.post('/api/list-pdfs', (req, res) => {
 // Endpoint to compress PDF from file path
 app.post('/api/compress-pdf-from-path', async (req, res) => {
     try {
-        const { sourcePath, fileName, optimizeLevel, destinationPath } = req.body;
+        const { sourcePath, fileName, optimizeLevel, destinationPath, deleteOriginal } = req.body;
         
         console.log(`📄 Processing PDF from path: ${fileName}`);
         console.log(`📁 Source: ${sourcePath}`);
         console.log(`📁 Destination: ${destinationPath}`);
         console.log(`⚙️ Optimization level: ${optimizeLevel || 3}`);
+        console.log(`🗑️ Delete original: ${deleteOriginal ? 'YES' : 'NO'}`);
         
         if (!sourcePath || !fileName || !destinationPath) {
             return res.status(400).json({ error: 'Missing required parameters' });
@@ -351,9 +356,12 @@ app.post('/api/compress-pdf-from-path', async (req, res) => {
             return res.status(400).json({ error: `File does not exist: ${filePath}` });
         }
         
+        // Clean the destination path by removing leading/trailing quotes
+        const cleanDestinationPath = destinationPath.trim().replace(/^['"]+|['"]+$/g, '');
+        
         // Validate destination directory exists
-        if (!fs.existsSync(destinationPath)) {
-            return res.status(400).json({ error: `Destination directory does not exist: ${destinationPath}` });
+        if (!fs.existsSync(cleanDestinationPath)) {
+            return res.status(400).json({ error: `Destination directory does not exist: ${cleanDestinationPath}` });
         }
         
         // Read the PDF file
@@ -401,19 +409,43 @@ app.post('/api/compress-pdf-from-path', async (req, res) => {
         
         // Save the compressed file
         const outputFilename = fileName.replace('.pdf', '_red.pdf');
-        const savedFilePath = path.join(destinationPath, outputFilename);
+        const savedFilePath = path.join(cleanDestinationPath, outputFilename);
         
         fs.writeFileSync(savedFilePath, compressedBuffer);
         console.log(`💾 File saved to: ${savedFilePath}`);
         
+        // Delete original file if requested and compression was successful
+        let originalDeleted = false;
+        if (deleteOriginal) {
+            try {
+                // Double-check that compressed file exists and has content
+                if (fs.existsSync(savedFilePath) && fs.statSync(savedFilePath).size > 0) {
+                    // Verify it's a PDF file to avoid deleting wrong files
+                    if (filePath.toLowerCase().endsWith('.pdf') && fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                        originalDeleted = true;
+                        console.log(`🗑️ Original file deleted: ${filePath}`);
+                    } else {
+                        console.warn(`⚠️ Skipped deletion - invalid file: ${filePath}`);
+                    }
+                } else {
+                    console.error(`❌ Skipped deletion - compressed file validation failed: ${savedFilePath}`);
+                }
+            } catch (deleteError) {
+                console.error(`❌ Error deleting original file: ${deleteError.message}`);
+                // Don't fail the entire operation if deletion fails
+            }
+        }
+        
         res.json({
             success: true,
-            message: 'File compressed and saved successfully',
+            message: originalDeleted ? 'File compressed and original deleted' : 'File compressed and saved successfully',
             originalSize,
             compressedSize,
             savings,
             savedPath: savedFilePath,
-            filename: outputFilename
+            filename: outputFilename,
+            originalDeleted
         });
         
     } catch (error) {
@@ -428,10 +460,16 @@ app.post('/api/compress-pdf-from-path', async (req, res) => {
 // Endpoint to compress PDF from full file path
 app.post('/api/compress-pdf-from-full-path', async (req, res) => {
     try {
-        const { fullPath, fileName, optimizeLevel } = req.body;
+        const { fullPath, fileName, optimizeLevel, deleteOriginal } = req.body;
+        
+        // 🔍 DEBUG TEMPORÁRIO - TODOS os parâmetros recebidos
+        console.log('🔍 DEBUG - TODOS os parâmetros recebidos:', JSON.stringify(req.body, null, 2));
+        console.log('🔍 DEBUG - deleteOriginal value:', deleteOriginal);
+        console.log('🔍 DEBUG - deleteOriginal type:', typeof deleteOriginal);
         
         console.log(`📄 Processing PDF from full path: ${fullPath}`);
         console.log(`⚙️ Optimization level: ${optimizeLevel || 3}`);
+        console.log(`🗑️ Delete original: ${deleteOriginal ? 'YES' : 'NO'}`);
         
         if (!fullPath || !fileName) {
             return res.status(400).json({ error: 'Missing required parameters' });
@@ -496,14 +534,38 @@ app.post('/api/compress-pdf-from-full-path', async (req, res) => {
         fs.writeFileSync(savedFilePath, compressedBuffer);
         console.log(`💾 File saved to: ${savedFilePath}`);
         
+        // Delete original file if requested and compression was successful
+        let originalDeleted = false;
+        if (deleteOriginal) {
+            try {
+                // Double-check that compressed file exists and has content
+                if (fs.existsSync(savedFilePath) && fs.statSync(savedFilePath).size > 0) {
+                    // Verify it's a PDF file to avoid deleting wrong files
+                    if (fullPath.toLowerCase().endsWith('.pdf') && fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                        originalDeleted = true;
+                        console.log(`🗑️ Original file deleted: ${fullPath}`);
+                    } else {
+                        console.warn(`⚠️ Skipped deletion - invalid file: ${fullPath}`);
+                    }
+                } else {
+                    console.error(`❌ Skipped deletion - compressed file validation failed: ${savedFilePath}`);
+                }
+            } catch (deleteError) {
+                console.error(`❌ Error deleting original file: ${deleteError.message}`);
+                // Don't fail the entire operation if deletion fails
+            }
+        }
+        
         res.json({
             success: true,
-            message: 'File compressed and saved successfully',
+            message: originalDeleted ? 'File compressed and original deleted' : 'File compressed and saved successfully',
             originalSize,
             compressedSize,
             savings,
             savedPath: savedFilePath,
-            filename: outputFilename
+            filename: outputFilename,
+            originalDeleted
         });
         
     } catch (error) {
@@ -531,7 +593,8 @@ app.post('/api/test-save', upload.single('fileInput'), (req, res) => {
             return res.status(400).json({ error: 'No destination path specified' });
         }
         
-        const saveDir = destinationPath.trim();
+        // Clean the path by removing leading/trailing quotes
+        const saveDir = destinationPath.trim().replace(/^['"]+|['"]+$/g, '');
         
         // Validate path
         if (!fs.existsSync(saveDir)) {
@@ -561,6 +624,52 @@ app.post('/api/test-save', upload.single('fileInput'), (req, res) => {
     } catch (error) {
         console.error('🧪 Test save error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Test endpoint for file deletion capability
+app.post('/api/test-delete', (req, res) => {
+    try {
+        console.log('🧪 Testing file deletion capability...');
+        
+        // Create a temporary test file
+        const testFile = '/tmp/test_delete.txt';
+        fs.writeFileSync(testFile, 'teste de deleção');
+        console.log(`✅ Test file created: ${testFile}`);
+        
+        // Verify it exists
+        if (fs.existsSync(testFile)) {
+            console.log(`✅ Test file exists and can be accessed`);
+            
+            // Delete it
+            fs.unlinkSync(testFile);
+            console.log(`🗑️ Test file deleted successfully`);
+            
+            // Verify it's gone
+            if (!fs.existsSync(testFile)) {
+                console.log(`✅ Deletion confirmed - file no longer exists`);
+                res.json({ 
+                    success: true, 
+                    message: 'File deletion test passed! Node.js can delete files normally.' 
+                });
+            } else {
+                res.json({ 
+                    success: false, 
+                    message: 'File deletion failed - file still exists after unlinkSync' 
+                });
+            }
+        } else {
+            res.json({ 
+                success: false, 
+                message: 'Could not create test file' 
+            });
+        }
+    } catch (error) {
+        console.error('🧪 File deletion test error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: `File deletion test failed: ${error.message}` 
+        });
     }
 });
 
